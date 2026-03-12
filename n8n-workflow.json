@@ -1,0 +1,262 @@
+{
+  "name": "Chris Daily Finance — Content Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chris-finance-generator",
+        "responseMode": "lastNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "node-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.input_type }}",
+              "value2": "topic"
+            }
+          ]
+        }
+      },
+      "id": "node-if",
+      "name": "IF: Topic or Script Mode",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "HTTP-Referer", "value": "https://chrisdailyfinance.com" },
+            { "name": "X-Title", "value": "Chris Daily Finance" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "deepseek/deepseek-chat",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional YouTube finance scriptwriter for the channel \"Chris Daily Finance.\"\n\nWrite a compelling, story-driven finance comparison script.\n\nRULES:\n- Two named characters (randomly pick American first names: e.g. Jake, Sarah, Marcus, Priya, Tyler, Alex, Jordan, Mia), same starting age (randomly pick between 22–26), same income — but making one different financial decision\n- Track progress at: 5 years | 10 years | then the final comparison period\n- Use specific USD dollar amounts. Reference US-specific financial vehicles: Roth IRA, 401(k), S&P 500 Index, index funds, real estate, etc.\n- LONG-FORM: 700–900 words. SHORT-FORM: 130–180 words.\n- Flowing narration ONLY. No bullet points, no headers, no commentary.\n- Label each major time-jump section: [SCENE 1], [SCENE 2], [SCENE 3], etc.\n- End with a clear winner and a punchy memorable closing line.\n- Output ONLY the script text. Nothing else."
+            },
+            {
+              "role": "user",
+              "content": "=TOPIC: {{ $('Webhook Trigger').item.json.body.content }}\nVIDEO TYPE: {{ $('Webhook Trigger').item.json.body.video_length }}"
+            }
+          ],
+          "temperature": 0.8
+        }
+      },
+      "id": "node-script-gen",
+      "name": "AI: Script Generator (Topic)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "HTTP-Referer", "value": "https://chrisdailyfinance.com" },
+            { "name": "X-Title", "value": "Chris Daily Finance" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "deepseek/deepseek-chat",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional YouTube finance scriptwriter for \"Chris Daily Finance.\"\n\nThe user will provide an existing finance script. Rewrite it in the Two Paths storytelling format:\n1. Assign two random American first names to the two characters\n2. Assign a random starting age (22–26)\n3. Assign a random comparison period (20–35 years)\n4. Keep the original financial topic and key numbers\n5. Add [SCENE 1], [SCENE 2], [SCENE 3] etc. labels at each major time jump\n6. End with a clear winner and a punchy memorable closing line\n7. Output ONLY the rewritten script. NO commentary, NO explanation."
+            },
+            {
+              "role": "user",
+              "content": "=ORIGINAL SCRIPT:\n{{ $('Webhook Trigger').item.json.body.content }}"
+            }
+          ],
+          "temperature": 0.8
+        }
+      },
+      "id": "node-script-rewrite",
+      "name": "AI: Script Rewriter (Script Mode)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize output from either AI branch\nconst item = $input.all()[0];\nconst body = item.json;\nconst script = body.choices?.[0]?.message?.content || '';\nconst topic = $('Webhook Trigger').item.json.body.content || 'Finance Topic';\nconst inputType = $('Webhook Trigger').item.json.body.input_type || 'topic';\n\nreturn [{ json: { script, topic, inputType } }];"
+      },
+      "id": "node-normalize",
+      "name": "Code: Normalize Script",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "deepseek/deepseek-chat",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a script parser. Extract each [SCENE X] block from the script as JSON.\n\nOutput STRICT JSON ARRAY ONLY with no explanation, no markdown, no code fences:\n[\n  { \"scene_number\": 1, \"scene_label\": \"Opening\", \"scene_text\": \"...\" },\n  { \"scene_number\": 2, \"scene_label\": \"5 Years Later\", \"scene_text\": \"...\" }\n]\n\nIf there are no scene labels, split the script logically into 3–4 scenes."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.script }}"
+            }
+          ],
+          "temperature": 0.2
+        }
+      },
+      "id": "node-scene-split",
+      "name": "AI: Scene Splitter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse scenes JSON from AI response\nconst item = $input.all()[0];\nconst raw = item.json.choices?.[0]?.message?.content || '[]';\nconst script = item.json.script || $('Code: Normalize Script').item.json.script;\nconst topic = item.json.topic || $('Code: Normalize Script').item.json.topic;\n\nlet scenes = [];\ntry {\n  // Strip markdown code fences if present\n  const cleaned = raw.replace(/```json|```/g, '').trim();\n  scenes = JSON.parse(cleaned);\n} catch(e) {\n  scenes = [{ scene_number: 1, scene_label: 'Full Script', scene_text: script }];\n}\n\n// Pass script + topic through\nreturn scenes.map(s => ({ json: { ...s, script, topic } }));"
+      },
+      "id": "node-parse-scenes",
+      "name": "Code: Parse Scenes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "node-split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "deepseek/deepseek-chat",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an AI image prompt engineer for the YouTube channel \"Chris Daily Finance.\"\n\n═══ BRAND CHARACTER (ALWAYS USE THIS) ═══\nThe main character is a photorealistic full-body 3D-rendered human skeleton with large, expressive round eyeballs inside its bone eye sockets. The skeleton is always fully dressed in completely opaque, layered clothing. This is the channel mascot. Never show bare bones — always fully clothed.\n\n═══ OUTFIT BY EMOTIONAL CONTEXT ═══\n- Professional/confident/winning: dark navy tailored 3-piece suit, white dress shirt, gold silk tie, pocket square, polished Oxford shoes, upright posture\n- Stressed/worried/losing: grey knitted beanie, thick grey cowl neck scarf, chunky grey open cardigan over white button-down, dark charcoal trousers, dark grey loafers, slight hunch\n- Wealthy/celebrating/victorious: navy pinstripe suit, gold Rolex watch at wrist, champagne glass in hand, wide confident stance\n- Defeated/in debt/sad: disheveled cardigan with visible stains, slouched posture, tear streaks on cheekbones, looking downward\n\n═══ EXPRESSION RULES ═══\nRead the scene → reflect emotion in: posture, head angle, hand position, eyeball expression.\n- Shock/surprise: wide-open round eyeballs, head tilted slightly back\n- Sadness/despair: half-lidded eyeballs looking down, shoulders drooped, tear streaks\n- Confidence/pride: bright forward-looking eyeballs, chest out, chin up\n- Determination: narrowed eyeballs, forward lean, fists at sides\n\n═══ SETTINGS (cinematic, hyper-realistic) ═══\n- Financial decisions/planning: home study — wooden drafting table, blueprint pinned to it, bookshelves, articulated desk lamp providing warm amber light\n- Investing/wealth: sleek financial office — glass walls, city skyline at night visible behind, frosted conference table\n- Retirement/future success: bright sunlit modern home — large floor-to-ceiling window, ocean or garden view, warm golden-hour light\n- Bills/debt/stress: cluttered home desk — papers everywhere, overcast grey light from window, shadows, dim environment\n- Comparison/reveal: split environment — left side dim/stressed, right side bright/successful, character standing at the boundary\n\n═══ PROPS (always include at least one relevant prop) ═══\n- Bills/debt: papers in hands labeled with legible bold red/black text: OVERDUE, FINAL NOTICE, DELINQUENT\n- Investing/stocks: laptop showing upward green stock chart or brokerage app on screen\n- Retirement/wealth: printed account statement held in hand, large dollar amount visible ($1.2M+)\n- Comparison: two stacks of cash of different sizes OR two upward charts side by side\n- Document/planning: blueprint or financial plan document spread on desk\n\n═══ LIGHTING ═══\nAlways cinematic. Minimum two light sources — mix warm amber and cool blue-grey. 8K resolution, hyper-realistic render. Emphasize texture contrast between soft fabric clothing and hard smooth bone.\n\n═══ OUTPUT FORMAT ═══\nWrite ONE complete image prompt of 200–300 words. Describe everything: character emotion, outfit, pose, props, setting, background details, lighting, style. No explanation — just the prompt."
+            },
+            {
+              "role": "user",
+              "content": "=Generate an image prompt for this scene:\n\nTOPIC: {{ $json.topic }}\nSCENE NUMBER: {{ $json.scene_number }}\nSCENE LABEL: {{ $json.scene_label }}\nSCENE TEXT: {{ $json.scene_text }}"
+            }
+          ],
+          "temperature": 0.85
+        }
+      },
+      "id": "node-image-prompt",
+      "name": "AI: Image Prompt Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all scene prompts into a final response object\nconst items = $input.all();\nif (!items.length) return [{ json: { error: 'No scenes generated' } }];\n\nconst first = items[0].json;\nconst script = first.script || '';\nconst topic = first.topic || 'Finance Topic';\n\nconst scenes = items.map(item => ({\n  scene_number: item.json.scene_number,\n  scene_label: item.json.scene_label || '',\n  scene_text: item.json.scene_text || '',\n  image_prompt: item.json.choices?.[0]?.message?.content || ''\n}));\n\nreturn [{ json: { topic, script, scenes } }];"
+      },
+      "id": "node-aggregate",
+      "name": "Code: Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "node-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[ { "node": "IF: Topic or Script Mode", "type": "main", "index": 0 } ]]
+    },
+    "IF: Topic or Script Mode": {
+      "main": [
+        [ { "node": "AI: Script Generator (Topic)", "type": "main", "index": 0 } ],
+        [ { "node": "AI: Script Rewriter (Script Mode)", "type": "main", "index": 0 } ]
+      ]
+    },
+    "AI: Script Generator (Topic)": {
+      "main": [[ { "node": "Code: Normalize Script", "type": "main", "index": 0 } ]]
+    },
+    "AI: Script Rewriter (Script Mode)": {
+      "main": [[ { "node": "Code: Normalize Script", "type": "main", "index": 0 } ]]
+    },
+    "Code: Normalize Script": {
+      "main": [[ { "node": "AI: Scene Splitter", "type": "main", "index": 0 } ]]
+    },
+    "AI: Scene Splitter": {
+      "main": [[ { "node": "Code: Parse Scenes", "type": "main", "index": 0 } ]]
+    },
+    "Code: Parse Scenes": {
+      "main": [[ { "node": "Split In Batches", "type": "main", "index": 0 } ]]
+    },
+    "Split In Batches": {
+      "main": [[ { "node": "AI: Image Prompt Generator", "type": "main", "index": 0 } ]]
+    },
+    "AI: Image Prompt Generator": {
+      "main": [[ { "node": "Code: Aggregate Results", "type": "main", "index": 0 } ]]
+    },
+    "Code: Aggregate Results": {
+      "main": [[ { "node": "Respond to Webhook", "type": "main", "index": 0 } ]]
+    }
+  }
+}
