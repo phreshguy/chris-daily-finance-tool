@@ -797,9 +797,10 @@
   // ── Tabs ──
   function switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      b.classList.toggle('active', (i === 0 && tab === 'script') || (i === 1 && tab === 'prompts'));
+      b.classList.toggle('active', (i === 0 && tab === 'script') || (i === 1 && tab === 'voiceover') || (i === 2 && tab === 'prompts'));
     });
     document.getElementById('tabScript').classList.toggle('active', tab === 'script');
+    document.getElementById('tabVoiceover').classList.toggle('active', tab === 'voiceover');
     document.getElementById('tabPrompts').classList.toggle('active', tab === 'prompts');
   }
 
@@ -867,6 +868,9 @@
     // Topic label
     document.getElementById('resultTopicLabel').textContent = data.topic || 'Generated Content';
 
+    // Voiceover setup
+    document.getElementById('voiceoverText').innerHTML = escHtml(data.voiceover || '').replace(/\n/g, '<br>');
+
     // Script
     const scriptEl = document.getElementById('scriptText');
     let scriptHtml = '';
@@ -926,12 +930,17 @@
     setTimeout(() => { btn.textContent = 'Copy Prompt'; btn.classList.remove('copied'); }, 2000);
   }
 
-  async function copyScript() {
-    const text = currentResult?.script || '';
+  async function copyText(elementId, btn) {
+    const textElement = document.getElementById(elementId);
+    let text = '';
+    
+    if (elementId === 'scriptText') text = currentResult?.script || '';
+    if (elementId === 'voiceoverText') text = currentResult?.voiceover || '';
+
     await navigator.clipboard.writeText(text);
-    const btn = document.querySelector('.script-copy-btn');
+    const originalText = btn.textContent;
     btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = 'Copy All'; }, 2000);
+    setTimeout(() => { btn.textContent = originalText; }, 2000);
   }
 
   // ── Export ──
@@ -942,6 +951,7 @@
     out += `Generated: ${new Date().toLocaleString()}\n`;
     out += `${'='.repeat(60)}\n\n`;
     out += `SCRIPT\n${'─'.repeat(40)}\n${currentResult.script || ''}\n\n`;
+    out += `VOICEOVER (No Labels)\n${'─'.repeat(40)}\n${currentResult.voiceover || ''}\n\n`;
     out += `IMAGE PROMPTS\n${'─'.repeat(40)}\n`;
     (currentResult.scenes || []).forEach(s => {
       out += `\n[SCENE ${s.scene_number}] ${s.scene_label || ''}\n`;
