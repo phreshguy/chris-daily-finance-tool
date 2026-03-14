@@ -862,14 +862,28 @@
 
       clearInterval(msgInterval);
 
-      if (!res.ok) throw new Error(`n8n returned ${res.status}`);
-      const data = await res.json();
+      if (!res.ok) throw new Error(`n8n returned HTTP ${res.status}`);
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        throw new Error('n8n responded but returned invalid JSON. Check the workflow\'s Respond to Webhook node.');
+      }
+
       currentResult = data;
-      renderResults(data);
+
+      try {
+        renderResults(data);
+      } catch (renderErr) {
+        hideLoading();
+        showError(`Results received but failed to display: ${renderErr.message}`);
+        console.error('renderResults error:', renderErr, 'data:', data);
+      }
     } catch (err) {
       clearInterval(msgInterval);
       hideLoading();
-      showError(`Request failed: ${err.message}. Check your webhook URL and that n8n is running.`);
+      showError(`Request failed: ${err.message}`);
     }
   }
 
