@@ -739,6 +739,7 @@
     <div class="results-header">
       <div class="results-topic">Results — <span id="resultTopicLabel"></span></div>
       <div class="results-actions">
+        <button class="btn-ghost" id="audioDownloadBtn" onclick="downloadAudio()" style="display:none;">🔊 Download Voiceover</button>
         <button class="btn-ghost" onclick="exportAll()">⬇ Export .txt</button>
         <button class="btn-ghost" onclick="resetForm()">↺ New Generation</button>
       </div>
@@ -848,6 +849,7 @@
       ['Splitting scenes...', 'Breaking the script into individual scenes'],
       ['Generating image prompts...', 'Creating detailed prompts for each scene'],
       ['Generating animation prompts...', 'Directing motion for Google Veo 3.1'],
+      ['Generating voiceover...', 'ElevenLabs is recording the narration'],
       ['Almost done...', 'Packaging everything up for you'],
     ];
     let msgIdx = 0;
@@ -897,6 +899,14 @@
 
     // Topic label
     document.getElementById('resultTopicLabel').textContent = data.topic || 'Generated Content';
+
+    // Audio download button — show only if audio came back
+    const audioBtn = document.getElementById('audioDownloadBtn');
+    if (data.audio && data.audio.base64) {
+      audioBtn.style.display = 'flex';
+    } else {
+      audioBtn.style.display = 'none';
+    }
 
     // Voiceover setup
     document.getElementById('voiceoverText').innerHTML = escHtml(data.voiceover || '').replace(/\n/g, '<br>');
@@ -993,6 +1003,24 @@
     const originalText = btn.textContent;
     btn.textContent = '✓ Copied!';
     setTimeout(() => { btn.textContent = originalText; }, 2000);
+  }
+
+  // ── Download Audio ──
+  function downloadAudio() {
+    if (!currentResult?.audio?.base64) return;
+    const { base64, mime_type, filename } = currentResult.audio;
+    const byteChars = atob(base64);
+    const byteArr = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteArr[i] = byteChars.charCodeAt(i);
+    }
+    const blob = new Blob([byteArr], { type: mime_type || 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'voiceover.mp3';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ── Export ──
