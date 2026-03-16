@@ -748,6 +748,7 @@
       <button class="tab-btn active" onclick="switchTab('script')">📄 Script</button>
       <button class="tab-btn" onclick="switchTab('voiceover')">🎙 Voiceover</button>
       <button class="tab-btn" onclick="switchTab('prompts')">🎨 Image Prompts</button>
+      <button class="tab-btn" onclick="switchTab('animation')">🎬 Animation Prompts</button>
     </div>
 
     <!-- Script Tab -->
@@ -769,6 +770,11 @@
     <!-- Image Prompts Tab -->
     <div class="tab-content" id="tabPrompts">
       <div class="prompts-grid" id="promptsGrid"></div>
+    </div>
+
+    <!-- Animation Prompts Tab -->
+    <div class="tab-content" id="tabAnimation">
+      <div class="prompts-grid" id="animationGrid"></div>
     </div>
   </div>
 </main>
@@ -805,15 +811,12 @@
 
   // ── Tabs ──
   function switchTab(tab) {
-    // Sync button active states
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabOrder = ['script', 'voiceover', 'prompts'];
-    tabBtns.forEach((b, i) => b.classList.toggle('active', tabOrder[i] === tab));
-
-    // Sync content active states
+    const tabOrder = ['script', 'voiceover', 'prompts', 'animation'];
+    document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', tabOrder[i] === tab));
     document.getElementById('tabScript').classList.toggle('active', tab === 'script');
     document.getElementById('tabVoiceover').classList.toggle('active', tab === 'voiceover');
     document.getElementById('tabPrompts').classList.toggle('active', tab === 'prompts');
+    document.getElementById('tabAnimation').classList.toggle('active', tab === 'animation');
   }
 
   // ── Generate ──
@@ -844,6 +847,7 @@
       ['Writing your script...', 'DeepSeek is crafting the Two Paths story'],
       ['Splitting scenes...', 'Breaking the script into individual scenes'],
       ['Generating image prompts...', 'Creating detailed prompts for each scene'],
+      ['Generating animation prompts...', 'Directing motion for Google Veo 3.1'],
       ['Almost done...', 'Packaging everything up for you'],
     ];
     let msgIdx = 0;
@@ -925,7 +929,7 @@
             <span class="prompt-scene-label">${escHtml(scene.scene_label || '')}</span>
           </div>
           <div class="prompt-card-actions">
-            <button class="copy-prompt-btn" onclick="copyPrompt(event, this, ${i})">Copy Prompt</button>
+            <button class="copy-prompt-btn" onclick="copyPrompt(event, this, ${i}, 'image')">Copy Prompt</button>
             <span class="chevron">▼</span>
           </div>
         </div>
@@ -933,9 +937,30 @@
       `;
       grid.appendChild(card);
     });
-
-    // Open first card by default
     if (grid.firstChild) grid.firstChild.classList.add('open');
+
+    // Animation prompts
+    const animGrid = document.getElementById('animationGrid');
+    animGrid.innerHTML = '';
+    scenes.forEach((scene, i) => {
+      const card = document.createElement('div');
+      card.className = 'prompt-card';
+      card.innerHTML = `
+        <div class="prompt-card-header" onclick="toggleCard(this.parentElement)">
+          <div class="prompt-card-title">
+            <span class="scene-badge" style="background:rgba(99,190,255,0.12);border-color:#63beff;color:#63beff;">SCENE ${scene.scene_number}</span>
+            <span class="prompt-scene-label">${escHtml(scene.scene_label || '')}</span>
+          </div>
+          <div class="prompt-card-actions">
+            <button class="copy-prompt-btn" onclick="copyPrompt(event, this, ${i}, 'animation')">Copy Prompt</button>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="prompt-body">${escHtml(scene.animation_prompt || '')}</div>
+      `;
+      animGrid.appendChild(card);
+    });
+    if (animGrid.firstChild) animGrid.firstChild.classList.add('open');
 
     document.getElementById('resultsPanel').classList.add('visible');
     document.getElementById('resultsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -947,9 +972,10 @@
   }
 
   // ── Copy Helpers ──
-  async function copyPrompt(e, btn, idx) {
+  async function copyPrompt(e, btn, idx, type) {
     e.stopPropagation();
-    const prompt = currentResult.scenes[idx]?.image_prompt || '';
+    const scene = currentResult.scenes[idx];
+    const prompt = type === 'animation' ? (scene?.animation_prompt || '') : (scene?.image_prompt || '');
     await navigator.clipboard.writeText(prompt);
     btn.textContent = '✓ Copied!';
     btn.classList.add('copied');
@@ -981,7 +1007,12 @@
     out += `IMAGE PROMPTS\n${'─'.repeat(40)}\n`;
     (currentResult.scenes || []).forEach(s => {
       out += `\n[SCENE ${s.scene_number}] ${s.scene_label || ''}\n`;
-      out += `${s.image_prompt || ''}\n\n`;
+      out += `${s.image_prompt || ''}\n`;
+    });
+    out += `\n\nANIMATION PROMPTS (Google Veo 3.1)\n${'─'.repeat(40)}\n`;
+    (currentResult.scenes || []).forEach(s => {
+      out += `\n[SCENE ${s.scene_number}] ${s.scene_label || ''}\n`;
+      out += `${s.animation_prompt || ''}\n`;
     });
 
     const blob = new Blob([out], { type: 'text/plain' });
